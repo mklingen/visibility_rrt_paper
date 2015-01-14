@@ -118,7 +118,53 @@ Carnegie Mellon University\\
 
 \IEEEpeerreviewmaketitle
 
-\section{Introduction}
+\newcommand{\R}{\mathbf{R}}
+\newcommand{\Cfree}{C_{\text{free}}}
+\newcommand{\Cobs}{C_{\text{obs}}}
+\newcommand{\qinit}{q_{\text{init}}}
+\newcommand{\qfinal}{q_{\text{final}}}
+
+\section{Sketch}
+
+Consider a robot with one or more sensors mounted on it.  How do we move the
+robot such that it can see unknown obstacles and avoid them before hitting them?
+
+The robot has an $N$-dimensional configuration space $C \subseteq \R^{N}$. Parts
+of the configuration space either do not intersect obstacles: $\Cfree \subseteq C$,
+or else intersect them: $\Cobs \subseteq C$. 
+
+The classical motion planning task is to find a trajectory from an initial
+configuration $\qinit \in \Cfree$, to a final configuration $\qfinal \in
+\Cfree$ such that all the configurations are in the free space (a condition
+called \textit{collision-free}):
+
+$$ \xi =\{ \qinit, q_1, \ldots, \qfinal \} \text{s.t~} \forall q \in \xi,~
+q\in \Cfree$$
+
+We can extend the classical problem to include a \textit{visibility region} $V_q
+\subseteq \R^3$ in the work space, which defines all of the points that are
+visibile to the sensor at a given robot configuration. We can also define the
+visibilty region of a trajectory as the union of  the visibility regions of its
+configurations:
+
+$$ V_\xi= \bigcup_{q \in \xi} v_q $$
+
+Additionally, for a configuration we can define the \textit{body} of the robot
+$B_q \subseteq \R^3$, which is a set of all the points inside the robot's
+links at configuration $q$. Define a trajectory as being \textit{visible} when
+each body point in each configuration of the trajectory is contained in the
+visibilty region of the trajectory. That is:
+
+$$ \forall q \in \xi, B_q \subseteq V_\xi$$
+
+\noindent Define a trajectory as being \textit{consistently visible} if, for
+each configuration $q_i$, all of its body points lie inside the visibility region of
+the trajectory from $\qinit$ to $q_{i - 1}$:
+
+$$ \forall q_i \in \xi, B_{q_i} \subseteq V_{\xi[0\ldots i - 1]}$$
+
+Now, the task is to find a trajectroy from $\qinit$ to $\qfinal$ which is both
+collision-free, \emph{and} consistently visible.
 
 % trigger a \newpage just before the given reference
 % number - used to balance the columns on the last page
