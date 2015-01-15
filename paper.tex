@@ -12,9 +12,11 @@
 
 % *** MATH PACKAGES ***
 \usepackage[cmex10]{amsmath}
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
 
 % *** SPECIALIZED LIST PACKAGES ***
-%\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 
 
 % *** ALIGNMENT PACKAGES ***
@@ -123,8 +125,10 @@ Carnegie Mellon University\\
 \newcommand{\Cobs}{C_{\text{obs}}}
 \newcommand{\qinit}{q_{\text{init}}}
 \newcommand{\qfinal}{q_{\text{final}}}
+\newcommand{\vis}{\textsc{Visible}}
+\newcommand{\cfree}{\textsc{Free}}
 
-\section{Sketch}
+\section{Problem Sketch}
 
 Consider a robot with one or more sensors mounted on it.  How do we move the
 robot such that it can see unknown obstacles and avoid them before hitting them?
@@ -136,10 +140,12 @@ or else intersect them: $\Cobs \subseteq C$.
 The classical motion planning task is to find a trajectory from an initial
 configuration $\qinit \in \Cfree$, to a final configuration $\qfinal \in
 \Cfree$ such that all the configurations are in the free space (a condition
-called \textit{collision-free}):
+called \cfree):
 
-$$ \xi =\{ \qinit, q_1, \ldots, \qfinal \} \text{s.t~} \forall q \in \xi,~
-q\in \Cfree$$
+\begin{equation}
+\xi =\{ \qinit, q_1, \ldots, \qfinal \} \text{s.t~} \forall q \in \xi,~ q\in
+\Cfree 
+\end{equation}
 
 We can extend the classical problem to include a \textit{visibility region} $V_q
 \subseteq \R^3$ in the work space, which defines all of the points that are
@@ -147,24 +153,123 @@ visibile to the sensor at a given robot configuration. We can also define the
 visibilty region of a trajectory as the union of  the visibility regions of its
 configurations:
 
-$$ V_\xi= \bigcup_{q \in \xi} v_q $$
+\begin{equation}
+V_\xi= \bigcup_{q \in \xi} v_q 
+\end{equation}
 
 Additionally, for a configuration we can define the \textit{body} of the robot
 $B_q \subseteq \R^3$, which is a set of all the points inside the robot's
-links at configuration $q$. Define a trajectory as being \textit{visible} when
-each body point in each configuration of the trajectory is contained in the
-visibilty region of the trajectory. That is:
+links at configuration $q$.  Define a trajectory as being \textit{visible} if, 
+for each configuration $q_i$, all of its body points lie inside the visibility
+region of the trajectory from $\qinit$ to $q_{i - 1}$:
 
-$$ \forall q \in \xi, B_q \subseteq V_\xi$$
-
-\noindent Define a trajectory as being \textit{consistently visible} if, for
-each configuration $q_i$, all of its body points lie inside the visibility region of
-the trajectory from $\qinit$ to $q_{i - 1}$:
-
-$$ \forall q_i \in \xi, B_{q_i} \subseteq V_{\xi[0\ldots i - 1]}$$
+\begin{equation}
+\vis(\xi) \Rightarrow \forall q_i \in \xi, B_{q_i} \subseteq
+V_{\xi[0\ldots i - 1]}
+\end{equation}
 
 Now, the task is to find a trajectroy from $\qinit$ to $\qfinal$ which is both
-collision-free, \emph{and} consistently visible.
+collision-free, \emph{and}  visible.
+
+\section{Solution Sketch}
+
+We can solve the problem using a Rapdily Exploring Random Tree (RRT). We shall
+define the RRT as a tree made up of nodes $\tau = \{n_{\text{root}}, n_1,
+\ldots, n_K\}$.
+Each node is a tuple $n = (q_n, p_n)$, where $q_n$ is the configuration of node $n$, and
+$p_n$ is the parent node of $n$. The root node of the tree has no parent. Any
+path of nodes going from parent nodes to child nodes through the tree can be
+considered a trajectory. Call $\xi_n$ the trajectory from the root node of the
+tree to the node $n$: 
+
+\begin{equation}
+\xi_n = \{q_{n_{\text{root}}}, \ldots, q_{p_n},  q_n\} 
+\end{equation}
+
+The basic unidirectional RRT (Alg. \ref{alg:RRT}) grows a tree from $\qinit$ to
+$\qfinal$ by incrementally adding nodes to the tree while maintaining the invariant that all
+trajectories through the tree from the root node at $\qinit$ to any other node
+in the tree are collision-free. When $\qfinal$ in in the tree, the necessary result is a
+collision-free trajectory from $\qinit$ to $\qfinal$ exists.
+
+\begin{algorithm}
+\caption{Unidirectional RRT}\label{alg:RRT}
+\begin{algorithmic}[1]
+\Procedure{Plan}{$\qinit, \qfinal, \text{bias}$}
+   \State$\tau \gets \{(\qinit, \text{undefined})\}$
+   \While{\textbf{not} $\qfinal \in \tau$}
+       \State $g \gets \textsc{UniformRandom}(0, 1)$  
+       \If{$g \geq \text{bias}$}
+       		\State $q_r \gets \textsc{UniformRandomSample}(C)$
+       \Else
+       		 \State $q_r \gets \qfinal$
+       \EndIf
+       \State $n_n \gets \argmin_{n \in \tau} \|q_n - q_r\|$
+       \State $\textsc{Extend}(n_n, q_r)$ 
+   \EndWhile
+   \State \textbf{return} $\xi_{n_{\text{final}}}$
+\EndProcedure
+
+\Procedure{Extend}{$\tau, n_{\text{from}}, q_{\text{to}}$}
+    \State $\xi_{\text{local}}  \gets \text{LocalPlan}(q_{n_{\text{from}}},
+    q_{\text{to}})$
+    
+    \If{$\cfree(\xi_{\text{local}})$}
+         \State $\tau \gets \{\tau, (q_{\text{to}}, n_{\text{from}})\}$
+    \EndIf    
+\EndProcedure
+
+\end{algorithmic}
+\end{algorithm}
+
+All we need to do is add another invariant to maintain: that all
+trajectories from the root node to any other node in the tree are also
+visible. That is:
+
+\begin{equation}
+    \forall n \in \tau, \vis(\xi_n)
+\end{equation} 
+
+This can be achieved by modifying the \textsc{Extend} procedure so that new
+nodes are added only if adding them would not break the visibility invariant
+(Alg. \ref{alg:extend}).
+Two ways that this can be accomplished are either by rejecting extensions which
+violate the invariant (\textsc{ExtendReject}), or by generating only
+invariant-preserving extensions using the Shooting Method
+(\textsc{ExtendShoot}). The \textsc{ExtendShoot} method is analagous to treating
+the $\vis$ invariant as a non-holonomic constraint. The result is that, as the
+tree grows, all trajectories from the root to other nodes are \vis.
+
+\begin{algorithm}
+\caption{Visibility Extension with Rejection or Shooting} \label{alg:extend}
+\begin{algorithmic}[1]
+	\Procedure{ExtendReject}{$\tau, n_{\text{from}}, q_{\text{to}}$}
+	    \State {$\xi_l  \gets \text{LocalPlan}(q_{n_{\text{from}}},
+	    q_{\text{to}})$}
+	    \State{$\xi_r \gets \{\xi_{n_{\text{from}}},
+	    \xi_{l}\}$}
+	    \State{$\text{valid} \gets \vis(\xi_r)~\textbf{and}~\cfree(\xi_l)$}
+	    \If{$\text{valid}$} 
+	    	\State{$\tau \gets \{\tau, (q_{\text{to}}, n_{\text{from}})\}$}
+	    \EndIf   
+	\EndProcedure
+	
+	\Procedure{ExtendShoot}{$\tau, n_{\text{from}}, q_{\text{to}}, M, U$}
+		   \State{$\Xi \gets \{\}$}
+		    \For{$i = 1 \ldots M$}
+		        \State{$u \gets \textsc{RandomControls}()$}
+		        \State{$\xi_u \gets \textsc{Shoot}(q_{\text{from}}, u, U)$}
+		        \State{$\xi_u \gets \textsc{TruncateVisible}(\xi_u, n_{\text{from}})$}
+		    \EndFor
+		    \State{$\xi^* = \argmin_{\xi \in \Xi} \min_{q \in \xi} \| q -
+		    q_{\text{to}}\|$}
+		    \State{$q^* = \argmin_{q \in \xi^*} \| q - q_{\text{to}} \|$}
+		    \If{$\cfree(\xi^*)$}
+		        	\State{$\tau \gets \{\tau, (q^*, n_{\text{from}})\}$}
+		    \EndIf 
+	\EndProcedure
+\end{algorithmic}
+\end{algorithm}  
 
 % trigger a \newpage just before the given reference
 % number - used to balance the columns on the last page
